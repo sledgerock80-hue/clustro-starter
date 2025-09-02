@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'static-v1';
+const STATIC_CACHE = 'static-v2';
 const RUNTIME_CACHE = 'runtime-v1';
 
 const STATIC_ASSETS = [
@@ -53,3 +53,4 @@ self.addEventListener('fetch', (e) => {
     fetch(e.request).catch(() => caches.match(e.request))
   );
 });
+
