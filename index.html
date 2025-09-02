@@ -838,27 +838,57 @@ const App = (function(){
     }
     return out;
   }
-  async function readFile(f){
-    return new Promise((res,rej)=>{
-      const fr=new FileReader();
-      fr.onload=e=>{
-        try{
-          wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-          if(wb.SheetNames.includes("2025DATA")){
-            rows = toRows(wb.Sheets["2025DATA"]);
-            rowsById = new Map(rows.map(r=>[String(r.id), r]));
-            afterLoad();
-          }else{
-            $("#adv").style.display='block';
-            $("#sheet").innerHTML=wb.SheetNames.map(n=>`<option>${n}</option>`).join("");
-            alert("2025DATA 시트를 찾을 수 없어 ‘고급 설정’을 열었습니다.");
-          }
-          res();
-        }catch(err){alert("엑셀 파싱 실패: "+err.message); rej(err);}
-      };
-      fr.readAsArrayBuffer(f);
-    });
-  }
+  <script>
+async function readFile(f){
+  return new Promise(async (res, rej) => {
+    try {
+      // 1) iOS 안전한 방식: ArrayBuffer로 우선 읽기
+      const buf = await f.arrayBuffer();
+      let _wb;
+
+      try {
+        // 1차: 바이너리 배열로 파싱 (일반 .xlsx/.xlsm/.xlsb 대부분 성공)
+        _wb = XLSX.read(new Uint8Array(buf), { type:'array' });
+      } catch (e1) {
+        // 2차 폴백: 텍스트로 디코드해 문자열 파싱 (일부 XML/CSV 변종 대응)
+        try {
+          const txt = new TextDecoder('utf-8').decode(new Uint8Array(buf));
+          _wb = XLSX.read(txt, { type:'string' });
+        } catch (e2) {
+          alert('엑셀 파싱 실패: ' + (e1?.message || e1));
+          return rej(e1);
+        }
+      }
+
+      // 기존 전역/상위 변수에 맞춰 할당 (프로젝트 코드 유지)
+      wb = _wb;
+
+      // ====== 아래 시트 선택/검증 로직은 기존 코드에 맞춰 유지 ======
+      // 필요에 따라 시트명 바꾸세요(예: '2025DATA')
+      let targetName = '2025DATA';
+      if (wb.SheetNames.includes(targetName)) {
+        const ws = wb.Sheets[targetName];
+        rows = toRows(ws, ($('#latCol')?.value||'R'), ($('#lngCol')?.value||'S')); // 프로젝트 함수/컬럼 사용
+        rowsById = new Map(rows.map(r => [String(r.id), r]));
+      } else {
+        // 시트 선택 UI 노출 (프로젝트의 기존 DOM id를 사용)
+        const box = document.querySelector('#adv');
+        if (box) box.style.display = 'block';
+        const sel = document.querySelector('#sheet');
+        if (sel) sel.innerHTML = wb.SheetNames.map(n => `<option>${n}</option>`).join('');
+        alert('지정한 시트를 찾을 수 없어 "고급 설정"을 열었습니다.');
+      }
+
+      // 후처리 (기존 함수 호출 그대로 유지)
+      if (typeof afterLoad === 'function') afterLoad();
+      res();
+    } catch (err) {
+      alert('엑셀 파싱 실패: ' + (err?.message || err));
+      rej(err);
+    }
+  });
+}
+</script>
   function toRowsManual(){
     const ws=wb.Sheets[$("#sheet").value]; if(!ws){alert("시트를 선택하세요."); return;}
     rows = toRows(ws, ($("#latCol").value||'R'), ($("#lngCol").value||'S'));
